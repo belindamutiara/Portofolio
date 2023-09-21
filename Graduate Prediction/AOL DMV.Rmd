@@ -1,0 +1,639 @@
+---
+title: "AOL"
+author: "Laurentia Alyssa Castilani - 2502049006"
+        "Belinda Mutiara - 2540119596"
+        "Nathania Christy Nugraha -2502035026"
+        "Grace Shirley Cam - 2501996505"
+        "Jocelyn Verna Siswanto - 2502008006"
+date: '2022-05-14'
+output: html_document
+---
+
+```
+Graduate Admission merupakan sebuah dataset berisi informasi mengenai kriteria penerimaan pascasarjana dari prespektif India. Di dalam dataset ini berisi beberapa parameter yang dianggap penting untuk mengaplikasi ke program magister yaitu:
+
+1.Serial No.
+2.GRE [Graduate Record Examinations] Scores ( out of 340 ).
+3.TOEFL [Test of English as a Foreign Language] Scores ( out of 120 ).
+4.University Rating ( out of 5 ).
+5.SOP [Statement of Purpose].
+6.LOR [Letter of Recommendation Strength] ( out of 5 ).
+7.CGPA [Cumulative Grade Points Average] ( out of 10 ).
+8.Research ( either 0 or 1 ).
+9.Chance of Admit ( ranging from 0 to 1 ).
+
+Dataset milik Mohan S Acharya ini dibuat dengan tujuan untuk membantu siswa dalam memilih universitas sesuai dengan kemampuan mereka. Diharapkan output dari model yang dibuat mampu memberikan gambaran tentang peluang diterima atau tidaknya mereka di suatu universitas.
+```
+
+```{r}
+#Mengunduh libraries yang dibutuhkan untuk kepentingan analisa mupun visualisasi.
+library(tidyverse)
+library(Hmisc)
+library(car)
+library(caret)
+library(ggplot2)
+library(corrplot)
+```
+
+```{r}
+#Membaca dan menyimpan dataset kedalam sebuah variabel bernama "df".
+df <- read.csv("https://raw.githubusercontent.com/belindamutiara/Git-hub-tutorial/main/Admission_Predict_fix.csv")
+```
+
+```{r}
+dim(df)
+```
+```
+__EXPLANATION__
+Dataset "Graduate Admission" terdiri dari 400 observasi dan 9 variabel.
+```
+
+```{r}
+summary(df)
+```
+```
+Dari data di atas didapatkan informasi sebagai berikut:
+1. Nilai minimum GRE Score adalah 290 sementara yang terbesar ialah 340, dengan rata-rata 316.
+2. Nilai minimum TOELF Score adalah 92 sementara yang terbesar ialah 120, dengan rata-rata 107.4
+3. Nilai minimum University Rating Score adalah 1 sementara yang terbesar ialah 5, dengan rata-rata 3.087.
+4. Nilai minimum SOP Score adalah 1 sementara yang terbesar ialah 5, dengan rata-rata 3.4.
+5. Nilai minimum LOR Score adalah 1 sementara yang terbesar ialah 5, dengan rata-rata 3.453.
+6. Nilai minimum CGPA Score adalah 6.8 sementara yang terbesar ialah 9.920, dengan rata-rata 8.599.
+7. Nilai minimum Research Score adalah 0 sementara yang terbesar ialah 1, dengan rata-rata 0.5.
+8. Rata-rata Kemungkinan diterima ialah sebesar 72% sedangkan yang kemungkinan diterima terkecil ialah sebesar 34% dan yang terbesar ialah sebesar 97%.
+```
+
+```{r}
+summary(is.na(df))
+```
+```
+__EXPLANATION__
+Dataset "Graduate Admission" dapat dikatakan sebagai data yang baik sebab di dalam dataset ini tidak ditemukan missing value.
+```
+
+```{r}
+str(df)
+```
+```
+__EXPLANATION__
+Dataset "Graduate Admission" terdiri dari 2 tipe data, yaitu tipe data integer yang dimiliki oleh variabel Serial.No., GRE.Score, TOELF.Score, University.Rating, dan Research. Sementara tipe data numeric dimiliki oleh varabel SOP, LOR, CGPA, dan Chance.of.Admit. 
+Variabel target dari data set ini adalah Chance.of.Admit, sedangkan sisanya merupakan variabel independen.
+```
+
+```{r}
+BasicSummary <- function(df, dgts = 3){
+## #
+## ################################################################
+## #
+## # Create a basic summary of variables in the data frame df,
+## # a data frame with one row for each column of df giving the
+## # variable name, type, number of unique levels, the most
+## # frequent level, its frequency and corresponding fraction of
+## # records, the number of missing values and its corresponding
+## # fraction of records
+## #
+## ################################################################
+## #
+m <- ncol(df)
+varNames <- colnames(df)
+varType <- vector("character",m)
+topLevel <- vector("character",m)
+topCount <- vector("numeric",m)
+missCount <- vector("numeric",m)
+levels <- vector("numeric", m)
+
+for (i in 1:m){
+x <- df[,i]
+varType[i] <- class(x)
+xtab <- table(x, useNA = "ifany")
+levels[i] <- length(xtab)
+nums <- as.numeric(xtab)
+maxnum <- max(nums)
+topCount[i] <- maxnum
+maxIndex <- which.max(nums)
+lvls <- names(xtab)
+topLevel[i] <- lvls[maxIndex]
+missIndex <- which((is.na(x)) | (x == "") | (x == " "))
+missCount[i] <- length(missIndex)
+}
+n <- nrow(df)
+topFrac <- round(topCount/n, digits = dgts)
+missFrac <- round(missCount/n, digits = dgts)
+## #
+summaryFrame <- data.frame(variable = varNames, type = varType,
+ levels = levels, topLevel = topLevel,
+ topCount = topCount, topFrac = topFrac,
+ missFreq = missCount, missFrac = missFrac)
+ return(summaryFrame)
+ }
+
+BasicSummary(df)
+```
+```
+__EXPLANATION__
+Serial.No.          bertipe integer memiliki 400 nilai yang berbeda dengan nilai modus 1 dengan banyak nilai 1
+GRE.Score	          bertipe integer memiliki 49 nilai yang berbeda dengan nilai modus 312 dengan banyak nilai 19
+TOEFL.Score	        bertipe integer memiliki 29 nilai yang berbeda dengan nilai modus 110 dengan banyak nilai 37
+University.Rating	  bertipe integer memiliki 5 nilai yang berbeda dengan nilai modus 3 dengan banyak nilai 133
+SOP	                bertipe numeric memiliki 9 nilai yang berbeda dengan nilai modus 3.5 dengan banyak nilai 70
+LOR	                bertipe numeric memiliki 9 nilai yang berbeda dengan nilai modus 3 dengan banyak nilai 85
+CGPA	              bertipe numeric memiliki 168 nilai yang berbeda dengan nilai modus 8 dengan banyak nilai 9
+Research            bertipe integer memiliki 2 nilai yang berbeda dengan nilai modus 1 dengan banyak nilai 219
+Chance.of.Admit     bertipe numeric memiliki 60 nilai yang berbeda dengan nilai modus 0.64 dengan banyak nilai 17
+
+penjelasan : 
+  1. lebih dari 50% anak telah melakukan Research
+  2. LOR nilai paling banyak bernilai 3 dengan persentase 20% dari keseluruhan
+```
+  
+```{r}
+# Compute the mean of each column
+sapply(df, mean, na.rm=TRUE)
+#c(2:8,10)-> kolom nomor 2-8, dan 10, kolom 9 itu integer ga dipakai, semua baris
+#na.rm= biar klo ada mising value di abaikan.
+
+```
+
+```{r}
+# Compute quartiles
+sapply(df, quantile, na.rm=TRUE)
+```
+
+```{r}
+describe(df)
+```
+```
+__EXPLANATION__
+Penjelasan untuk sapply dan describe
+1. rata-rata chance.of.admit adalah 72%
+2. Peluang diterima terkecil ialah sebesar 34% dan yang terbesar ialah sebesar 97%.
+3. Setengah dari observasi memiliki peluang diterima sekitar lebih dari 70%.
+4. nilai rata-rata SOP termasuk ke nilai terbesar di SOP
+
+```
+
+```{r}
+par(mfrow=c(3,3))
+qqPlot(df$Serial.No.)
+qqPlot(df$GRE.Score)
+qqPlot(df$TOEFL.Score)
+qqPlot(df$University.Rating)
+qqPlot(df$SOP)
+qqPlot(df$LOR)
+qqPlot(df$CGPA)
+qqPlot(df$Research)
+qqPlot(df$Chance.of.Admit)
+```
+```
+__EXPLANATION__
+GRE.Score, TOEFL.Score, CGPA, dan Chance.of.Admit terlihat memiliki distribusi yang normal dan hasilnya baik, sedangkan Research, LOR, SOP, University.Rating berbentuk seperti tangga karena termasuk kedalam categorical dan bernilai diskrit. Serial.No merupakan nilai id sehingga tidak perlu diperhatikan.
+```
+
+```{r}
+ThreeSigma <- function(x, t = 3){
+
+ mu <- mean(x, na.rm = TRUE)
+ sig <- sd(x, na.rm = TRUE)
+ if (sig == 0){
+ message("All non-missing x-values are identical")
+}
+ up <- mu + t * sig
+ down <- mu - t * sig
+ out <- list(up = up, down = down)
+ return(out)
+ }
+
+Hampel <- function(x, t = 3){
+
+ mu <- median(x, na.rm = TRUE)
+ sig <- mad(x, na.rm = TRUE)
+ if (sig == 0){
+ message("Hampel identifer implosion: MAD scale estimate is zero")
+ }
+ up <- mu + t * sig
+ down <- mu - t * sig
+ out <- list(up = up, down = down)
+ return(out)
+ }
+   
+BoxplotRule<- function(x, t = 1.5){
+
+ xL <- quantile(x, na.rm = TRUE, probs = 0.25, names = FALSE)
+ xU <- quantile(x, na.rm = TRUE, probs = 0.75, names = FALSE)
+ Q <- xU - xL
+ if (Q == 0){
+ message("Boxplot rule implosion: interquartile distance is zero")
+ }
+ up <- xU + t * Q
+ down <- xL - t * Q
+ out <- list(up = up, down = down)
+ return(out)
+}   
+
+ExtractDetails <- function(x, down, up){
+
+ outClass <- rep("N", length(x))
+ indexLo <- which(x < down)
+ indexHi <- which(x > up)
+ outClass[indexLo] <- "L"
+ outClass[indexHi] <- "U"
+ index <- union(indexLo, indexHi)
+ values <- x[index]
+ outClass <- outClass[index]
+ nOut <- length(index)
+ maxNom <- max(x[which(x <= up)])
+ minNom <- min(x[which(x >= down)])
+ outList <- list(nOut = nOut, lowLim = down,
+ upLim = up, minNom = minNom,
+ maxNom = maxNom, index = index,
+ values = values,
+ outClass = outClass)
+ return(outList)
+ }
+```
+
+```{r}
+FindOutliers <- function(x, t3 = 3, tH = 3, tb = 1.5){
+ threeLims <- ThreeSigma(x, t = t3)
+ HampLims <- Hampel(x, t = tH)
+ boxLims <- BoxplotRule(x, t = tb)
+
+ n <- length(x)
+ nMiss <- length(which(is.na(x)))
+
+ threeList <- ExtractDetails(x, threeLims$down, threeLims$up)
+ HampList <- ExtractDetails(x, HampLims$down, HampLims$up)
+ boxList <- ExtractDetails(x, boxLims$down, boxLims$up)
+
+ sumFrame <- data.frame(method = "ThreeSigma", n = n,
+ nMiss = nMiss, nOut = threeList$nOut,
+ lowLim = threeList$lowLim,
+ upLim = threeList$upLim,
+ minNom = threeList$minNom,
+ maxNom = threeList$maxNom)
+ upFrame <- data.frame(method = "Hampel", n = n,
+ nMiss = nMiss, nOut = HampList$nOut,
+ lowLim = HampList$lowLim,
+ upLim = HampList$upLim,
+ minNom = HampList$minNom,
+ maxNom = HampList$maxNom)
+ sumFrame <- rbind.data.frame(sumFrame, upFrame)
+ upFrame <- data.frame(method = "BoxplotRule", n = n,
+ nMiss = nMiss, nOut = boxList$nOut,
+ lowLim = boxList$lowLim,
+ upLim = boxList$upLim,
+ minNom = boxList$minNom,
+ maxNom = boxList$maxNom)
+ sumFrame <- rbind.data.frame(sumFrame, upFrame)
+
+ threeFrame <- data.frame(index = threeList$index,
+ values = threeList$values,
+ type = threeList$outClass)
+ HampFrame <- data.frame(index = HampList$index,
+ values = HampList$values,
+ type = HampList$outClass)
+ boxFrame <- data.frame(index = boxList$index,
+ values = boxList$values,
+ type = boxList$outClass)
+ outList <- list(summary = sumFrame, threeSigma = threeFrame,
+ Hampel = HampFrame, boxplotRule = boxFrame)
+ return(outList)
+}
+```
+
+```{r}
+fullSummary <- FindOutliers(df$Serial.No.)
+fullSummary$summary
+```
+
+```{r}
+fullSummary <- FindOutliers(df$GRE.Score)
+fullSummary$summary
+
+```
+
+```{r}
+fullSummary <- FindOutliers(df$TOEFL.Score)
+fullSummary$summary
+
+```
+
+```{r}
+fullSummary <- FindOutliers(df$University.Rating)
+fullSummary$summary
+```
+
+```{r}
+fullSummary <- FindOutliers(df$SOP)
+fullSummary$summary
+```
+
+```{r}
+fullSummary <- FindOutliers(df$LOR)
+fullSummary$summary
+```
+
+```{r}
+fullSummary <- FindOutliers(df$CGPA)
+fullSummary$summary
+```
+
+```{r}
+fullSummary <- FindOutliers(df$Research)
+fullSummary$summary
+```
+```{r}
+fullSummary <- FindOutliers(df$Chance.of.Admit)
+fullSummary$summary
+```
+```
+__EXPLANATION__
+1.	Berdasarkan tabel di atas, pada variabel Serial No. GRE.Score, TOEFL.Score, University.Rating tidak ditemukan outliernya baik menggunakan Teknik ThreeSigma, Hampel, maupun Boxplot.
+2.	Pada variabel SOP ditemukan 6 outlier yang diidentifikasi menggunakan teknik hampel.
+3.	Pada variable LOR ditemukan masing-masing 1 outlier yang diidentifikasi menggunakan teknik Hampel dan Boxplot.
+4.	Pada variable CGPA ditemukan masing-masing 1 outlier yang diidentifikasi menggunakan teknik ThreeSigma dan Boxplot.
+5.	Pada variable Research, ditemukan 181 outlier yang diidentifikasi menggunakan teknik Hampel.
+6.	Pada variable Chance.of.Admit ditemukan 2 outlier yang diidentifikasi menggunakan teknik Boxplot.
+7.	lowLim dan upLim menunjukkan batas bawah dan atas untuk mendeteksi outlier, 
+8.	minNom dan maxNom menunjukkan nilai minimum dan maksimum dari titik data non-outlying.
+
+Pada analisis ini, kami tidak menghilangkan outlier dikarenakan:
+1. Research           : Hanya terdiri dari 2 nilai yaitu 1 dan 0.
+2. SOP                : Perbedaan antara outlier dengan batas bawah tidak terlalu jauh serta masih berada dalam range SOP (antar 0 sampai 5)
+3. LOR                : Perbedaan antara outlier dengan batas bawah tidak terlalu jauh serta masih berada dalam range LOR (antar 0 sampai 5)
+4. CGPA               : Perbedaan antara outlier dengan batas bawah tidak terlalu jauh serta masih berada dalam range CGPA (antar 0 sampai 10)
+5. Chance of Admit    : Perbedaan antara outlier dengan batas bawah tidak terlalu jauh serta masih berada dalam range peluang (antar 0 sampai 1)
+
+```
+
+```{r}
+df_new = df[-c(1)]
+rcorr(as.matrix(df_new), type = "spearman")
+```
+
+```{r}
+
+corrplot(cor(df_new), type="upper", tl.col = "black", tl.srt = 45)
+
+```
+
+```{r}
+df_new2 = df_new[-c(6)]
+rcorr(as.matrix(df_new2), type = "spearman")
+```
+
+```{r}
+corrplot(cor(df_new2), type="upper", tl.col = "black", tl.srt = 45)
+
+```
+
+```
+__EXPLANATION__
+Pada analisis dataset ini, variabel Chance.of.Admit akan digunakan sebagai variabel target (dependent variable).
+Setelah melihat korelasi variabel, kami menyimpulkan:
+
+1.	Variabel independent “Serial No.” tidak akan digunakan. Karena variabel ini hanya sebagai ID yang tidak berkolerasi dengan variabel target (jika dilihat berdasarkan koefisien korelasinya, variabel ini berkolerasi sangat lemah terhadap variabel target.)
+2.	Variabel independent “CGPA” juga dihapus karena memiliki korelasi yang sangat tinggi (> 0,7) terhadap semua variabel independent lainnya.
+3.	Setelah menghapus 2 variabel independent (“Serial.No.”, dan “CGPA”), P Value antara Chance.of.Admit dan variabel lainnya semuanya <0,05. Dengan begitu, korelasi menunjukkan bahwa cukup bukti bahwa terdapat hubungan yang signifikan (secara statistik) antara variabel.
+4.	Sehingga, dari 9 variabel yang tersedia, hanya akan digunakan 7 variabel yaitu “GRE.Score”, “TOEFL.Score”, “University.Rating”, “SOP”, “LOR”, “Research”, “Chance.of.Admit”
+
+```
+
+```{r}
+hist.data.frame(df)
+```
+
+```
+__EXPLANATION__
+Distribusi pengamatan variabel secara keseluruhan data, memiliki histogram yang bentuknya mirip dengan lonceng, hanya saja ada beberapa yang cenderung miring ke kanan. Namun kebanyakan bentuk histogramnya menunjukkan bahwa data variabel tersebut terdistribusi sudah cukup baik (normal).
+
+```
+
+```{r}
+pairs(~ Chance.of.Admit + . , data = df_new, main = "Admission Prediction")
+```
+```
+__EXPLANATION__
+-	Berdasarkan scatterplot yang ada, Sebagian besar variabel yang akan kami gunakan bentuknya sudah linear (mencapai garis linearitas) dan berkolerasi positif dengan variabel target (“Chance.of.Admit”). Oleh karena itu, kami dapat melanjutkan proses untuk membuat model linear regresi.
+- Variabel Research hanya memiliki 2 buah nilai (0 dan 1) sehingga tidak dapat berbentuk linear.
+```
+
+```{r}
+fit1=lm(Chance.of.Admit~.,data=df_new2)
+summary(fit1)
+plot(fit1, which = 1)
+```
+```
+__EXPLANATION__
+Dari Significant code di fit1, SOP dan University.Rating memiliki signifikansi yang lemah (P value besar) terhadap target variable-nya, yang artinya variabel-variabel tersebut memiliki hubungan yang lemah dengan Chance.of.Admit. Sehingga kita akan mengeluarkannya dari model.
+```
+
+```{r}
+fit2 <- lm(Chance.of.Admit~ GRE.Score + TOEFL.Score + LOR , data= df_new2)
+summary(fit2)
+plot(fit2, which = 1)
+```
+```
+__EXPLANATION__
+Pada fit2, setelah mengeluarkan variabel-variabel yang tidak signifikan, F-statistic meningkat dari 202,9 menjadi 381,4. P-value dari prediktor-prediktor lainnya juga mengecil, yang artinya signifikansinya meningkat. Namun, nilai dari residual standard error tidak berkurang, serta tidak ada peningkatan terhadap adjusted R-squared. Jadi kita akan mencoba menggunakan natural log pada variable Chance.of.Admit di model selanjutnya, dan melihat apakah ada perubahan performa dari model tersebut.
+```
+
+```{r}
+fit3 <- lm(log(Chance.of.Admit)~ GRE.Score + TOEFL.Score + LOR , data= df_new2)
+summary(fit3)
+plot(fit3, which = 1)
+```
+```
+__EXPLANATION__
+Dalam fit3, F-statistic dan adjusted R-squared tidak meningkat. Selain itu, residual standard error-nya malah bertambah. Sehingga dapat kita simpulkan bahwa bukan merupakan pilihan yang baik untuk menggunakan natural log terhadap target variable-nya. Kita akan mencoba untuk menghapus salah satu variabel independen saja.
+```
+
+```{r}
+fit4 <- lm(Chance.of.Admit~ GRE.Score  + LOR , data= df_new2)
+summary(fit4)
+plot(fit4, which = 1)
+```
+```
+__EXPLANATION__
+Di fit4, setelah TOEFL.Score dihapus, F-statistik meningkat dari 290,3 menjadi 500,3, dan adjusted R-squared meningkat dari 0,685 menjadi 0,7145. Residual standard error juga mengalami penurunan dari 0,1202 menjadi 0,0762. Hal ini merupakan peningkatan yang sangat baik. P-value dari semua prediktor juga menjadi sangat signifikan. Namun pada model berikutnya, kita akan mencoba untuk menghapus GRE.Score dan menggantikannya dengan TOEFL.Score, untuk melihat apakah model yang dihasilkan lebih baik dari fit4 atau tidak.
+```
+
+```{r}
+fit5 <- lm(Chance.of.Admit~  TOEFL.Score + LOR , data= df_new2)
+summary(fit5)
+plot(fit5, which = 1)
+```
+```
+__EXPLANATION__
+Pada fit5, setelah GRE.Score diganti dengan TOEFL.Score, F-statistik mengalami penurunan dari 500,3 menjadi 459,6, serta adjusted R-squared menurun dari 0,7145 menjadi 0,6968. Hal ini bukanlah peningkatan yang baik. Residual standard error juga malah bertambah dari 0,0762 menjadi 0,07852. Namun, semua nilai p prediktor masih sangat signifikan. Sehingga, dapat kita simpulkan bahwa model fit4 masih merupakan model yang paling baik.
+
+
+Maka, persamaan garis yang paling cocok untuk multiple linear regression adalah dari persamaan fit4:
+Chance.of.Admit = -0.9855451 + TOEFL.Score*(0.0142595) + LOR*(0.0516399)
+```
+
+```{r}
+set.seed(1)
+validation_index = createDataPartition(df_new2$Chance.of.Admit, p=0.8, list = FALSE)
+validationset = df_new2[-validation_index,]
+trainingset = df_new2[validation_index,]
+```
+
+```{r}
+#check testingset dimension
+dim(validationset)
+head(validationset)
+
+#check trainingset dimension
+dim(trainingset)
+```
+```
+__EXPLANATION__
+Untuk analisis lebih lanjut, dibutuhkan testing set dan training set. Training set digunakan untuk membangun model regresi, sedangkan testing set untuk mengevaluasi model yang dibangun. Dalam kasus ini, dataset akan kita bagi menjadi 80% untuk training set dan 20% untuk testing set.
+```
+
+
+```{r}
+prediction <- predict(fit4, validationset)
+Chance.of.Admit <- mean((validationset$Chance.of.Admit - prediction)^2)
+print(Chance.of.Admit)
+```
+```{r}
+sigma(fit4)/mean(validationset$Chance.of.Admit)
+```
+```
+__EXPLANATION__
+Dari model fit4, rata-rata dari kuadrat nilai error (nilai asli dikurangi nilai prediksi) adalah 0.006838585, yang berarti nilainya rendah. Persentase nilai error atau deviasinya sekitar 10.46547%. Hal ini berarti deviasi nilai prediksi dari nilai aslinya tergolong rendah.
+```
+
+```{r}
+prediction2 <- predict(fit5, validationset)
+Chance.of.Admit2 <- mean((validationset$Chance.of.Admit - prediction2)^2)
+print(Chance.of.Admit2)
+```
+
+```{r}
+sigma(fit5)/mean(validationset$Chance.of.Admit)
+```
+```
+__EXPLANATION__
+Dari model fit5, rata-rata dari kuadrat nilai error (nilai asli dikurangi nilai prediksi) adalah 0.006838585, yang berarti nilainya rendah. Persentase nilai error atau deviasinya sekitar 10.78475%. Hal ini berarti deviasi nilai prediksi dari nilai aslinya tergolong rendah.
+```
+
+```{r}
+validationset$predicted <- predict(fit4, validationset)
+actual_prediction <- data.frame(validationset$Chance.of.Admit, validationset$predicted, validationset$Chance.of.Admit - validationset$predicted)
+names(actual_prediction) <- c ("Chance.of.Admit", "Predicted", "residuals")
+correlation_accuracy <- cor(actual_prediction)
+correlation_accuracy
+```
+
+
+```{r}
+validationset$predicted <- predict(fit5, validationset)
+actual_prediction2 <- data.frame(validationset$Chance.of.Admit, validationset$predicted, validationset$Chance.of.Admit - validationset$predicted)
+names(actual_prediction2) <- c ("Chance.of.Admit", "Predicted", "residuals")
+correlation_accuracy2 <- cor(actual_prediction2)
+correlation_accuracy2
+```
+Korelasi antarvariabel di fit4 menunjukkan bahwa model fit4 memiliki akurasi 0.81077257, atau sekitar 81%.
+Korelasi antarvariabel di fit5 menunjukkan bahwa model fit5 memiliki akurasi 0.82745467, atau sekitar 83%.
+
+```{r}
+actual_prediction$Chance.of.Admit <- actual_prediction$Chance.of.Admit
+head(actual_prediction)
+```
+
+
+```{r}
+actual_prediction$Chance.of.Admit <- actual_prediction$Chance.of.Admit
+head(actual_prediction2)
+```
+```
+__EXPLANATION__
+Dari kedua tabel yang ada diatas bisa kita lihat bahwa kedua model yang kita buat menghasilkan hasil prediksi yang baik. Bisa dilihat dari nilai-nilai residual yang kecil, hal ini menunjukkan bahwa prediksi yang dihasilkan model kita tidak jauh meleset dari nilai aslinya. Dari kedua data diatas juga bisa kita lihat bahwa residual yang dihasilkan oleh model fit4 memiliki nilai lebih kecil dibanding residual yang dihasilkan oleh fit5. Hal ini juga menunjukkan bahwa artinya fit4 memiliki tebakan yang lebih baik dibanding tebakan yang dihasilkan oleh fit5.
+
+Persentase nilai error dari fit4 juga lebih rendah dari fit5, yang berarti bahwa model fit4 lebih tepat dibandingkan model fit5
+
+```
+
+```{r}
+predict_Chance.of.Admit <- predict(fit4, validationset)
+linear_model <- lm(validationset$Chance.of.Admit ~ exp(predict_Chance.of.Admit))
+plot.new()
+rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], col = "whitesmoke")
+par(new = TRUE)
+plot(exp(predict_Chance.of.Admit), validationset$Chance.of.Admit, xlab="Predicted Chance.of.Admit", ylab="Actual Chance.of.Admit",
+     pch = 21, bg = "lightblue1", col = "black", cex = 1,lwd = 1.2)
+
+abline(linear_model, col = "magenta")
+```
+
+
+```{r}
+predict_Chance.of.Admit <- predict(fit5, validationset)
+linear_model <- lm(validationset$Chance.of.Admit ~ exp(predict_Chance.of.Admit))
+plot.new()
+rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], col = "whitesmoke")
+par(new = TRUE)
+plot(exp(predict_Chance.of.Admit), validationset$Chance.of.Admit, xlab="Predicted Chance.of.Admit", ylab="Actual Chance.of.Admit",
+     pch = 21, bg = "lightblue1", col = "black", cex = 1,lwd = 1.2)
+
+abline(linear_model, col = "magenta")
+```
+```
+__EXPLANATION__
+Hasil dari model linear kita keduanya cukup baik, karena ada titik pada data kita yang berpotongan dengan garis linear kita di kedua model dan titik-titik lain juga berada berdekatan dengan garis model linear kita. Dimana hal itu berarti linear model kita sudah cukup akurat dalam memprediksi. 
+
+Bisa kita lihat bahwa model yang dihasilkan fit4, jumlah titik-titik data yang berdekatan dengan model linearnya lebih banyak dibanding fit5. Jika kita melihat kedua plot kita secara keseluruhan bisa dilihat bahwa plot yang dihasilkan fit4 memiliki kesan yang lebih sempit, hal ini menunjukkan bahwa lebih banyak titik yang dekat dengan garis regresi kita dibanding yang dihasilkan plot dari fit5.
+
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit4)
+par(mfrow = c(1,1))
+```
+```{r}
+par(mfrow=c(2,2))
+plot(fit5)
+par(mfrow = c(1,1))
+```
+```
+__EXPLANATION__
+Penjelasan dari hasil plotting residual yang dilakukan pada masing-masing model adalah:
+1. Residual vs Fitted:
+Dari hasil plotting yang sudah kita buat, bisa dilihat bahwa model kita sudah cukup baik, dikarenakan pada kedua model ini garis yang dihasilkan dari plot Residual vs Fitted ini tidak menghasilkan garis melengkung yang signifikan, hal ini menunjukkan bahwa model linear kita sudah cukup baik dan tersebar secara merata.
+Bisa kita lihat bahwa plot yang dihasilkan oleh fit4 memiliki garis yang bisa dibilang lebih tidak melekuk dibanding fit5. Dimana semakin lurus garis yang dihasilkan maka artinya data kita tersebar dengan lebih baik dibanding plot yang menghasilkan garis melengkung/ melekuk.
+2. Normal Q-Q:
+Dari plot kita bisa kita lihat bahwa sebagian besar data kita berada di garis lurus yang titik-titik. Hal ini menandakan bahwa distribusi dari residual yang berasal dari model kita terdistribusi secara normal. 
+Dari kedua model kita, bisa kita lihat bahwa data pada model fit4 lah yang lebih banyak berada pada garis distribusi normal itu.
+3. Scale-Location:
+Sama seperti plot Residual vs Fitted kita, kedua plot Scale-Location juga tidak menunjukan pola.
+Pada plot, model fit4 juga menunjukkan garis yang lebih lurus dibanding model fit5.
+4. Residual vs Leverage:
+Pada plot kita, kita tidak melihat garis melengkung yang menandakan Cook's distance, hal ini berarti bahwa data kita tidak memiliki data yang memiliki pengaruh besar (berbeda dengan outlier), dan hasil itulah yang hendak kita dapatkan.
+Kedua model yang kita miliki tidak memiliki data yang memiliki pengaruh besar (influential data points).
+
+```
+
+```{r}
+par(mfrow=c(2,1))
+hist(rstudent(fit4))
+```
+
+```{r}
+par(mfrow=c(2,1))
+hist(rstudent(fit5))
+```
+```
+__EXPLANATION__
+Function ```rstudent()``` ini menunjukkan bagaimana distribusi dari nilai-nilai residual kita. Kedua model kita memiliki distribusi residu yang normal. Sehingga bisa dikatakan bahwa kedua model kita sudah baik. Kedua model kami memiliki histogram yang berbentuk lonceng walaupun keduanya sedikit condong ke kanan. Jika kita melihat pada bagian yang berbentuk lonceng, fit4 memiliki bentuk lonceng yang lebih baik dibanding fit5. Fakta ini juga diperkuat oleh Q-Q Plot yang sudah kita buat sebelumnya sudah terlihat juga bahwa fit4 lah yang datanya lebih banyak menyentuh garis, yang berarti datanya terdistribusi secara lebih baik.
+
+Karena model fit4 ternyata adalah model yang terbaik, kita akan menggunakan persamaan dari fit4 untuk menarik kesimpulan. Persamaan:
+Chance.of.Admit = -1.9044247 + GRE.score*(0.0077395) + LOR*(0.0512215)
+
+Dari persamaan diatas, dapat disimpulkan bahwa setiap kenaikan 1% dari nilai tes ujian masuk (GRE.score), ada kenaikan 0.0077395% dari peluang penerimaan (Chance.of.Admit). Dan setiap kenaikan 1% dari nilai LOR, ada kenaikan 0.0512215 dari peluang penerimaan. Ini artinya jika ingin memperbesar peluang penerimaan di perguruan tinggi, yang terutama harus ditingkatkan adalah nilai ujian masuk (GRE) dan nilai Letter of Recommendation.
+
+```
+
