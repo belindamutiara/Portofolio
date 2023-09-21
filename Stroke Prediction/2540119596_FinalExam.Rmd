@@ -1,0 +1,816 @@
+---
+title: '2540119596'
+author: "Belinda Mutiara"
+date: '2022-08-03'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## [Explanation Video Link] : https://drive.google.com/drive/folders/1iWIjiMqAQf32cAAqtjDu_VlgYOT7C-wQ?usp=sharing
+
+## Importing Libraries
+```{r}
+library("RColorBrewer")
+library(ROCR)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(Hmisc)
+library(car)
+library(caret)
+library(ggplot2)
+library(corrplot)
+```
+## About The Data
+```
+According to the World Health Organization (WHO), stroke is the second greatest cause of death worldwide, responsible for around 11% of all fatalities.
+Based on input criteria such as gender, age, hypertension, heart_disease, smoking status, work type, residence type,bmi,married status, glucose level , this dataset is used to predict whether a patient is likely to have a stroke. Each row of data contains information about the patient.
+```
+
+## 1a. Exploratory Data Analysis
+
+### Undersanding Goal(s) of The Dataset
+
+```
+The aim is to create a model that can predict whether or not a person might have a stroke depending on specific factors.
+```
+### Data Understanding
+
+#### Importing data set 
+```{r}
+path <- "E:/Semester 2/Susulan_DMV/[LEC]_UAS_DTSC6005001_Data Mining and Visualization/StrokeData.csv"
+df <- read.csv(path)
+```
+
+#### Looking at The Dataset
+```{r}
+dim(df)
+```
+
+```{r}
+head(df)
+```
+
+```{r}
+tail(df)
+```
+
+```{r}
+str(df)
+```
+
+__Explanation__
+```
+1. The stroke data set consists of 5110 observations and has 12 attributes.
+2. There are three types of data:  integer, character, and numeric
+3. Variables that has integer data type are: id,hypertension, heart_disease, and stroke.
+4. Variables that has characther data type are: gender, ever_married, work_type, Residence_type, bmi, and smoking_status.
+5. Variables that has numeric data type are: age and avg_lucode_level
+6. There are some variable that do not have appropriate data type and we will handle this at the data preparation stage (for example, bmi, gender, and so on).
+7. From the code above we can see that there is a missing value for example in the bmi variable, we will also handle this in data preparation stage.
+8. As an additional information, our data has a certain arrangement, where observations numbered 1 to 249 are people who have stroke and the rest do not. We will handle with this by randomizing the data (modeling requires 2 different values).
+```
+
+```{r}
+describe(df)
+```
+
+
+__Explanation__
+```
+1. id: The id variable has 5110 distinct values, this indicates that the id variable is unique and can act as a differentiator between one observation and another.
+2. gender: The gender variable has 5110 observations indicating there is no missing value. This variable consists of 3 different values: female, male, and other. In this data, the majority of observations are female.
+3. age: The age variable has 5110 observations, this indicates that age does not have any missing value. Our youngest observation is under 1 year old while the oldest one is 82 years old with an average of 43.23.
+4. hypertension: Hypertension variable has 5110 observations indicating that this variable has no missing value. The hypertension variable consists of 2 values: 1 for hypertensive patients and 0 for non-hypertensive patients
+5. heart_diaese: Heart_diaease variable has 5110 observations indicating that this variable has no missing value. The hypertension variable consists of 2 values: 1 for heart_diases patients and 0 for non-heart_diases patients
+6. ever_married: Ever_married variable has 5110 observations indicating that this variable has no missing value. ever_married variable consists of 2 values: yes and no.
+7. work_type: Work type has 5110 observations indicating there is no missing value. The work type variable consists of 5 values: children, govt_job, never_worked, private, and self_employed. The majority of stroke data consists of people who work privately (I assume they open their own business)
+8. residence_type: The residence type variable has 5110 observations indicating that there is no missing value. Although it looks quite the same in number, but our observations mostly live in urban areas.
+9. avg_glucose_level: avg glucose level is a variable consisting of 5110 observations, this is indicates that there is no missing value. The lowest value was 55.12 while the highest was 271.74 with an average of 106.1
+10. bmi: Although bmi has 5110 observations, it doesn't mean that the bmi variable does not have a missing value, because if we look closely, we find that in this variable there are N/A value, which means there is a missing value.
+11. smoking_status: The smoking status variable has 4 different values: smoked, never smoked, smokes, and unknown. From here we can see that this variable has 1544 missing value from the "Unknown" status (a fairly large number).
+12. stroke: stroke which is the target variable has 2 values:1 for people who have strokes and 0 for people who do not have strokes
+```
+
+```{r}
+BasicSummary <- function(df, dgts = 3){
+## #
+## ################################################################
+## #
+## # Create a basic summary of variables in the data frame df,
+## # a data frame with one row for each column of df giving the
+## # variable name, type, number of unique levels, the most
+## # frequent level, its frequency and corresponding fraction of
+## # records, the number of missing values and its corresponding
+## # fraction of records
+## #
+## ################################################################
+## #
+m <- ncol(df)
+varNames <- colnames(df)
+varType <- vector("character",m)
+topLevel <- vector("character",m)
+topCount <- vector("numeric",m)
+missCount <- vector("numeric",m)
+levels <- vector("numeric", m)
+
+for (i in 1:m){
+x <- df[,i]
+varType[i] <- class(x)
+xtab <- table(x, useNA = "ifany")
+levels[i] <- length(xtab)
+nums <- as.numeric(xtab)
+maxnum <- max(nums)
+topCount[i] <- maxnum
+maxIndex <- which.max(nums)
+lvls <- names(xtab)
+topLevel[i] <- lvls[maxIndex]
+missIndex <- which((is.na(x)) | (x == "") | (x == " "))
+missCount[i] <- length(missIndex)
+}
+n <- nrow(df)
+topFrac <- round(topCount/n, digits = dgts)
+missFrac <- round(missCount/n, digits = dgts)
+## #
+summaryFrame <- data.frame(variable = varNames, type = varType,
+ levels = levels, topLevel = topLevel,
+ topCount = topCount, topFrac = topFrac,
+ missFreq = missCount, missFrac = missFrac)
+ return(summaryFrame)
+ }
+BasicSummary(df)
+```
+
+__Explanation__
+```
+1. The id variable has a topCount of 1 indicating that the id does not have duplication and is unique.
+2. The majority of observations are female with a total frequency of 2994 or equivalent to 58% of the data.
+3. Age variable has the highest frequency for age 78 years as many as 102 observations or about 2% of the data.
+4. The majority of our observations are persons who do not have hypertension; 4612 (90,3%)out of 5110 observations are reported to be free of this condition.
+5. The majority of our observations are persons who do not have heart diase; 4834 (94,6%) out of 5110 observations are reported to be free of this condition.
+6.The majority of our observations are married persons; 3353 (65,6%) of 5110 observations are of married people.
+7. The majority of our observations are persons who work private (I assume the person has his/her own business), with as many as 2925 (57,2%) out of 5110 observations stating that they work privately.
+8. Our observations have a slightly different comparison between people living in urban and rural areas, but the data shows that our observations are mostly people who live in urban areas (50.8%).
+9. Average glucose level has a mode of 93.88 which appears 6 times.
+10. bmi has 201 missing values observations or equivalent to 3.9%. We will handle this in data preparation stage.
+11. The mode from smoking status is "never smoked": 1892 out of 5110 observations or equivalent to 37%.
+12. The majority of our data, 4861 out of 5110 observations, come from patients who do not have a stroke.
+13. Although the missing value is not detected from "missFreq", we have to be more observant in looking at the data, some missing values are not stated explicitly but through the naming of each variable, for example bmi, the missing value is N/A, this is considered by system as a value and not a missing value. Furthermore, from smoking status, there is "unknown", actually unknown is considered a missing value because the person's data is not available.
+```
+#### Checking Duplicates
+```{r}
+sum(duplicated(df))
+```
+__Explanation__
+```
+"Stroke" data has no duplication between observations.
+```
+#### Look For Data Anomalies
+```{r}
+ThreeSigma <- function(x, t = 3){
+
+ mu <- mean(x, na.rm = TRUE)
+ sig <- sd(x, na.rm = TRUE)
+ if (sig == 0){
+ message("All non-missing x-values are identical")
+}
+ up <- mu + t * sig
+ down <- mu - t * sig
+ out <- list(up = up, down = down)
+ return(out)
+ }
+
+Hampel <- function(x, t = 3){
+
+ mu <- median(x, na.rm = TRUE)
+ sig <- mad(x, na.rm = TRUE)
+ if (sig == 0){
+ message("Hampel identifer implosion: MAD scale estimate is zero")
+ }
+ up <- mu + t * sig
+ down <- mu - t * sig
+ out <- list(up = up, down = down)
+ return(out)
+ }
+   
+BoxplotRule<- function(x, t = 1.5){
+
+ xL <- quantile(x, na.rm = TRUE, probs = 0.25, names = FALSE)
+ xU <- quantile(x, na.rm = TRUE, probs = 0.75, names = FALSE)
+ Q <- xU - xL
+ if (Q == 0){
+ message("Boxplot rule implosion: interquartile distance is zero")
+ }
+ up <- xU + t * Q
+ down <- xL - t * Q
+ out <- list(up = up, down = down)
+ return(out)
+}   
+
+ExtractDetails <- function(x, down, up){
+
+ outClass <- rep("N", length(x))
+ indexLo <- which(x < down)
+ indexHi <- which(x > up)
+ outClass[indexLo] <- "L"
+ outClass[indexHi] <- "U"
+ index <- union(indexLo, indexHi)
+ values <- x[index]
+ outClass <- outClass[index]
+ nOut <- length(index)
+ maxNom <- max(x[which(x <= up)])
+ minNom <- min(x[which(x >= down)])
+ outList <- list(nOut = nOut, lowLim = down,
+ upLim = up, minNom = minNom,
+ maxNom = maxNom, index = index,
+ values = values,
+ outClass = outClass)
+ return(outList)
+ }
+```
+
+```{r}
+FindOutliers <- function(x, t3 = 3, tH = 3, tb = 1.5){
+ threeLims <- ThreeSigma(x, t = t3)
+ HampLims <- Hampel(x, t = tH)
+ boxLims <- BoxplotRule(x, t = tb)
+
+ n <- length(x)
+ nMiss <- length(which(is.na(x)))
+
+ threeList <- ExtractDetails(x, threeLims$down, threeLims$up)
+ HampList <- ExtractDetails(x, HampLims$down, HampLims$up)
+ boxList <- ExtractDetails(x, boxLims$down, boxLims$up)
+
+ sumFrame <- data.frame(method = "ThreeSigma", n = n,
+ nMiss = nMiss, nOut = threeList$nOut,
+ lowLim = threeList$lowLim,
+ upLim = threeList$upLim,
+ minNom = threeList$minNom,
+ maxNom = threeList$maxNom)
+ upFrame <- data.frame(method = "Hampel", n = n,
+ nMiss = nMiss, nOut = HampList$nOut,
+ lowLim = HampList$lowLim,
+ upLim = HampList$upLim,
+ minNom = HampList$minNom,
+ maxNom = HampList$maxNom)
+ sumFrame <- rbind.data.frame(sumFrame, upFrame)
+ upFrame <- data.frame(method = "BoxplotRule", n = n,
+ nMiss = nMiss, nOut = boxList$nOut,
+ lowLim = boxList$lowLim,
+ upLim = boxList$upLim,
+ minNom = boxList$minNom,
+ maxNom = boxList$maxNom)
+ sumFrame <- rbind.data.frame(sumFrame, upFrame)
+
+ threeFrame <- data.frame(index = threeList$index,
+ values = threeList$values,
+ type = threeList$outClass)
+ HampFrame <- data.frame(index = HampList$index,
+ values = HampList$values,
+ type = HampList$outClass)
+ boxFrame <- data.frame(index = boxList$index,
+ values = boxList$values,
+ type = boxList$outClass)
+ outList <- list(summary = sumFrame, threeSigma = threeFrame,
+ Hampel = HampFrame, boxplotRule = boxFrame)
+ return(outList)
+}
+```
+__Note__
+```
+I only find outliers for age and avg_glucose_level because the other variables are categorical, where the value is certain, otherwise 1 means 0, otherwise male means female, and so on.
+```
+```{r}
+fullSummary <- FindOutliers(df$age)
+fullSummary$summary
+```
+
+```{r}
+fullSummary <- FindOutliers(df$avg_glucose_level)
+fullSummary$summary
+```
+```{r}
+par(mfrow=c(1,3), pty="m")
+sd_age <- sd(df$age)
+mean_age <- mean(df$age)
+median_age <- median(df$age)
+mad_age <- mad(df$age)
+
+#Three Sigma Edit Rule
+plot(df$age, main='Three Sigma Edit Rule', xlab='Record Number',ylab='age', ylim=c(-30,140), col="#4D004B")
+abline(h=mean_age+3*(sd_age),col='blue',lwd=3, lty = 'dotdash')
+abline(h=mean_age-3*(sd_age),col='blue',lwd=3, lty = 'dotdash')
+
+#Hampel Identifier
+plot(df$age,xlab='Record Number',ylab='age',main='Hampel Identifier',ylim=c(-40,150), col="#4D004B",lwd=2)
+abline(h=median_age+3*mad_age,lty='dotdash',col='blue',lwd=3)
+abline(h=median_age-3*mad_age,lty='dotdash',col='blue',lwd=3)
+
+#Boxplot Rule
+boxplot(df$age,xlab='Record Number',ylab='age',main='Boxplot Rule',col='#4D004B')
+
+#brewer.pal(12, "BuPu")
+```
+
+
+```{r}
+par(mfrow=c(1,3), pty="m")
+sd_avg <- sd(df$avg_glucose_level)
+mean_avg <- mean(df$avg_glucose_level)
+median_avg <- median(df$avg_glucose_level)
+mad_avg <- mad(df$avg_glucose_level)
+
+#Three Sigma Edit Rule
+plot(df$avg_glucose_level, main='Three Sigma Edit Rule', xlab='Record Number',ylab='avg_glucose_level', ylim=c(-30,300), col="#4D004B")
+abline(h=mean_avg +3*(sd_avg),col='blue',lwd=3, lty = 'dotdash')
+abline(h=mean_avg-3*(sd_avg),col='blue',lwd=3, lty = 'dotdash')
+
+#Hampel Identifier
+plot(df$avg_glucose_level,xlab='Record Number',ylab='avg_glucose_level',main='Hampel Identifier',ylim=c(10,300), col="#4D004B",lwd=2)
+abline(h=median_avg+3*(mad_avg),lty='dotdash',col='blue',lwd=3)
+abline(h=median_avg-3*(mad_avg),lty='dotdash',col='blue',lwd=3)
+
+#Boxplot Rule
+boxplot(df$avg_glucose_level,xlab='Record Number',ylab='avg_glucose_level',main='Boxplot Rule',col='#4D004B')
+
+#brewer.pal(12, "BuPu") #for color palette
+```
+
+
+___Explanation___
+```
+1. Variable age does not have any outlier value.
+2. avg_glucoce_level variable appears to have outliers: 49 outliers detected using the three sigma rule, 621 outliers detected using the Hammple identifier method, and 627 outliers detected using the boxplot method. However, the outliers in this variable are reasonable because it is a medical data where data from patients with abnormal conditions are very  normal.So in this case we will not delete any data detected as outliers.
+```
+#### Corelation Between Variables
+```{r}
+spearman2(~stroke + age + heart_disease + hypertension + bmi + avg_glucose_level + ever_married + gender+ work_type + Residence_type + smoking_status, data= df)
+```
+__Explanation__
+```
+Next, we will see the relationship between our dependent variable with our independent variables using Spearman2 function.
+
+basically spearman2 function shows the relationship between dependent variable and the independent variables. rho2 describes how strong the correlation is, while the p value in the table shows how significant the independent to the dependent variable is.
+
+From the output above, it can be seen that the higest rho2 or the strongest relationship is between stroke and age (0,062). While from the p value it can be seen that variable age, hypertension, heart_diasease, avg_glucose_level, ever_married, work_type, and smoking status are statistically significant with our target variable. But on the other hand, BMI, gender, and residence are not statistically significant to our target variable. This can be interpreted that they have less influence on the target variable. However, we do not need to worry because this data has not been cleaned so that in the future it is very possible to have a change in P value and rho2.
+```
+#### Checking Normality
+```{r}
+par(mfrow = c(1,2))
+qqPlot(df$age,main="Normality Age Variable")
+qqPlot(df$avg_glucose_level, main="Normality Avg_glucose_level")
+
+```
+__Explanation__
+```
+From the output above, it can be seen that the age variable is normally distributed while avg_glucose_level is not.
+
+I only do for variables that have integer and numeric data types because outside of that it can't be checked whether it is normal or skewed.
+```
+
+#### Look at The Relations Between Variables
+##### Bivariate Findings
+We are going to see the relation between two variables
+
+```{r}
+ggplot(df, aes(x = stroke, fill = gender)) + 
+  geom_bar(position = "dodge")+ ggtitle("Relation between Gender and Stroke")
+table(df$gender, df$stroke)
+```
+__Explnation__:
+```
+1. The number of people with stroke is less than those with non-stroke
+2. Our observations are mostly from women. For stroke patients or non stroke patients, the female gender ranks first. This could indicate that perhaps gender does not have much effect on stroke, anyone can get it, both men and women
+```
+
+```{r}
+plot(df$age, df$stroke,main="Relation between Age and Stroke")
+```
+__Explanation__
+```
+1. People with age over 45 are more likely to have strokes
+2. Young people are less likely to have strokes.
+```
+
+```{r}
+xtabs(~stroke + hypertension, data=df)
+```
+__Explanation__
+```
+1. Most observations do not have hypertension.
+2. 66 out of 249 observation tell that 26.5% of stroke sufferers have hypertension.
+3. 4429 out of 4861 observation tell that 91,1% of non stroke sufferers don't have hypertension
+```
+
+```{r}
+xtabs(~stroke + heart_disease, data=df)
+```
+
+__Explanation__
+```
+1. Most observations do not have heart disease.
+2. 47 out of 249 observation tell that 18,9% of stroke sufferers have heart disease.
+3. 4632 out of 4861 observation tell that 95,3% non stroke sufferers don't have heart disease.
+```
+
+```{r}
+ggplot(df, aes(x = stroke, fill = ever_married)) + 
+  geom_bar(position = "dodge")+ ggtitle("Relation between Married Status and Stroke")
+table(df$ever_married, df$stroke)
+```
+__Explanation__
+```
+1. The number of people with stroke is less than those non-stroke patients.
+2. Our observations are mostly from people that are married. For stroke patients or non stroke patients both are excelled by people with married status. This could indicate that perhaps married status does not have much effect on chance of stroke.
+```
+```{r}
+ggplot(df, aes(x = stroke, fill = work_type)) + 
+  geom_bar(position = "dodge")+ ggtitle("Relation between Work Type and Stroke")
+table(df$work_type, df$stroke)
+```
+__Explanation__
+```
+1. About 59.8 of the total stroke survivors work private (I assume that they have their own businesses).
+2. Everyone who has never worked doesn't have a stroke.
+3. the number of children with stroke is very small, only 2 children out of 687 or equivalent to 0.29%.
+```
+```{r}
+ggplot(df, aes(x = stroke, fill = Residence_type)) + geom_bar(position = "stack")+ ggtitle("Relation between Residence Type and Stroke")
+table(df$Residence_type, df$stroke)
+```
+__Explanation__
+```
+About 54.2% of people with stroke live in urban areas. This could indicate that perhaps residence type does not have much effect on stroke.
+```
+```{r}
+plot(df$avg_glucose_level, df$stroke, main="Relation between Glucose Level and Stroke")
+```
+__Explanation__
+```
+This is an interesting situation where persons with high blood sugar levels (over 140) are less likely to get a stroke compare to person with normal or below normal blood sugar level. According to research, people with high sugar levels have 1.5 times higher chance to get stroke.
+```
+```{r}
+plot(df$bmi, df$stroke, main="Relation between BMI and Stroke")
+```
+__Explanation__
+```
+From our data, it can be seen that people with BMI above normal (24.9) tend to have a higher probability of having a stroke than those with a normal BMI.
+Note : it should be remembered once again that the bmi in this process is the bmi which still has 201 missing values.
+```
+```{r}
+ggplot(df, aes(x = stroke, fill = smoking_status)) + 
+  geom_bar(position = "dodge")+ ggtitle("Relation between Smoking Status and Stroke")
+table(df$smoking_status, df$stroke)
+```
+__Explanation__
+```
+Most people with stroke come from those who have never smoked while active smokers are in the last position.
+Note : it should be remembered once again that the smoking status in this process still has 1544 missing values (labeled as "Unknown").
+```
+## 1b. Data Preparation
+
+### Remove Unused Variable
+To simplify our data we can exclude the id variable because it doesn't affect our target variable
+```{r}
+df_new <- df[c(2,3,4,5,6,7,8,9,10,11,12)]
+df_new
+```
+
+### Change the data type to what it should be
+Some variables don't have appropriate data type. So we have to replace them, firstly I want to change all characther data type except bmi into factor data type. Secondly I will change the bmi data type into numeric because bmi is a variable which value can be calculated.
+
+```{r}
+#From character to factor
+df_new$gender<-as.factor(df_new$gender)
+df_new$hypertension<-as.factor(df_new$hypertension)
+df_new$heart_disease<-as.factor(df_new$heart_disease)
+df_new$ever_married<-as.factor(df_new$ever_married)
+df_new$work_type<-as.factor(df_new$work_type)
+df_new$Residence_type<-as.factor(df_new$Residence_type)
+df_new$smoking_status<-as.factor(df_new$smoking_status)
+df_new$stroke<-as.factor(df_new$stroke)
+```
+```{r}
+#From character to numeric
+df_new$bmi<-as.numeric(df_new$bmi)
+```
+
+### Replacing Missing Value
+#### Checking Missing Value
+##### 1.  BMI
+```{r}
+colSums(is.na(df_new))
+```
+__Explanation__
+```
+There is a progress after changing the data type; previously, all missing values were zero; now, bmi has 201 missing value.
+Then what are we going to do? We will fill in the missing value with the mean of the bmi itself. 
+Why don't I throw it away? Based on the internet, BMI plays an important role in relation to stroke, also 201 is a not a large number (only about 4%) and can be handled easily through the average substitution method.
+```
+
+```{r}
+#replacing bmi's missing value
+df_new$bmi[is.na(df_new$bmi)]<-mean(df_new$bmi,na.rm=TRUE)
+```
+```{r}
+colSums(is.na(df_new))
+```
+Now the bmi variable don't have any missing value.
+
+##### 2. Gender
+```
+We need to remember that the gender variable has the value "other". In this time I will delete the row that has that value because in my opinion it is quite confusing, whether because the data is not found, or the person does not want to mention the gender, etcetera.
+```
+```{r}
+df_new<-df_new[!(df_new$gender == "Other"),]
+```
+
+##### 3. Smoking Status
+
+```
+Also, the smoking status variable has a lot of missing value even though it is not explicitly stated in the is.na function. It is stated that the value of "unknown" means the information is unavailable for this patient.
+However, we have a bigger problem, the number of "unknown" values has a fairly large proportion, which is 1544 or equivalent to 30% of the total population.
+
+After doing some research on the internet, I discovered that the greatest missing amount that could be allowed in general was roughly 25-30%. As a result, I will not dismiss the smoking status variable on this time, because smoking has a significant impact on stroke circumstances, I will consider it in the modeling section.
+
+We will replace "unknown" value with tha mode "never smoked".
+```
+```{r}
+df_new[ df_new == "Unknown" ] <- NA
+df_new$smoking_status[is.na(df_new$smoking_status)] <- "never smoked"
+```
+
+#### Rechecking Data
+Now that we're done working on the missing value, I'm going to check it using the describe function.
+
+```{r}
+describe(df_new)
+```
+
+__Explanation__
+```
+The output shows that we successfully filled in the missing value for BMI and smoking status plus eliminated 1 observation with the gender "other". So far we have 5109 observations and 11 variables.
+```
+### Little explanatory for smoking_status and bmi after data preparatiom
+__Note__
+```
+I didn't check for the gender variable because we only omitted 1 piece of data and the results won't be much different.
+```
+#### Checking Normality for BMI
+Normality can be done to integer/numeric data type, so we cannot check the normality for smoking_status
+```{r}
+qqPlot(df_new$bmi,main="Normality BMI Variable")
+```
+__Explanation__
+```
+From the results above, we can see that the BMI variable is quite normally distributed even though it is not perfect, there is a slight skew on the right side
+```
+#### Checking Data Anomalies for BMI
+```{r}
+fullSummary <- FindOutliers(df_new$bmi)
+fullSummary$summary
+```
+```{r}
+par(mfrow=c(1,3), pty="m")
+sd_bmi <- sd(df_new$bmi)
+mean_bmi <- mean(df_new$bmi)
+median_bmi <- median(df_new$bmi)
+mad_bmi <- mad(df_new$bmi)
+
+#Three Sigma Edit Rule
+plot(df_new$bmi, main='Three Sigma Edit Rule', xlab='Record Number',ylab='bmi', ylim=c(0,120), col="#4D004B")
+abline(h=mean_bmi+3*(sd_bmi),col='blue',lwd=3, lty = 'dotdash')
+abline(h=mean_bmi-3*(sd_bmi),col='blue',lwd=3, lty = 'dotdash')
+
+#Hampel Identifier
+plot(df_new$bmi,xlab='Record Number',ylab='bmi',main='Hampel Identifier',ylim=c(0,120), col="#4D004B",lwd=2)
+abline(h=median_bmi+3*mad_bmi,lty='dotdash',col='blue',lwd=3)
+abline(h=median_bmi-3*mad_bmi,lty='dotdash',col='blue',lwd=3)
+
+#Boxplot Rule
+boxplot(df_new$bmi,xlab='Record Number',ylab='bmi',main='Boxplot Rule',col='#4D004B')
+
+#brewer.pal(12, "BuPu")
+```
+__Explanation__
+```
+bmi variable appears to have outliers: 59 outliers detected using the three sigma rule, 98 outliers detected using the Hammple identifier method, and 128 outliers detected using the boxplot method. However, the outliers in this variable are reasonable because it is a medical data where data from patients with abnormal conditions are very  normal.So in this case we will not delete any data detected as outliers.
+```
+
+#### Rececking Relationship Between stroke-smoking_status and stroke-bmi
+
+```{r}
+ggplot(df_new, aes(x = stroke, fill = smoking_status)) + 
+  geom_bar(position = "dodge")+ ggtitle("Relation between Smoking Status and Stroke after removing unknown")
+table(df_new$smoking_status, df_new$stroke)
+```
+__Explanation__
+```
+Most people with stroke come from those who have never smoked while active smokers are in the last position.
+```
+```{r}
+plot(df_new$bmi, df_new$stroke, main="Relation between BMI and Stroke")
+```
+__Explanation__
+```
+From our data, it can be seen that people with a BMI above normal (24.9) tend to have a higher probability of having a stroke than those with a normal BMI.
+Also people who have a BMI above about 50 tend to rarely have a stroke probability
+```
+
+### Rechecking corelation
+```{r}
+spearman2(~stroke + age + hypertension + heart_disease + avg_glucose_level + bmi + gender + ever_married + work_type + Residence_type + smoking_status, data= df_new)
+```
+__Explanation__
+```
+After data preparation, we can see that there has been a slightly change, especially in the BMI variable, now BMI has become statistically significant while gender and residence are still not statistically significant. This is makes sense to me because gender and residency have little effect on stroke; what matters is how your body is and your daily behaviors.
+
+According to the correlation above, I believe the most important attribute is age.I also found a fact that stated adults over the age of 65 are twice as likely to get a stroke; nevertheless, gender and residency do not receive as much attention.
+
+source : https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3006180/#:~:text=The%20risk%20increases%20with%20age,will%20result%20in%20death1.
+```
+
+## 1c. Logistic Regression
+### Separate The Data
+```{r}
+set.seed(1) #Randomizing our data
+validation_index = createDataPartition(df_new$stroke, p=0.8, list = FALSE)
+validationset = df_new[-validation_index,]
+trainingset = df_new[validation_index,]
+```
+```{r}
+dim(validationset)
+dim(trainingset)
+```
+__Explanation__
+```
+I separated the data into two groups with an 80:20 ratio. Of course, the training set was bigger than the validation set. The training set contain of 4088 observations while validation set contain of 1021 observations.
+```
+
+```{r}
+LogisticModel <- glm(stroke~., data= trainingset, family='binomial'(link="logit"))
+summary(LogisticModel)
+```
+__Explanation__
+```
+1. This is not the model that will be deployed, but through this we can see some variables that has potential to create better model. In this case some important variables are age, hypertension, and avg_glucose_level. The AIC value of this initial model is 1308.1, the smaller aic value, the better model we make.
+2. Thankfully, the algorithm does not place a high importance on our smoking status, so we may ignore those 30% of missing values.
+```
+
+```{r}
+LogisticModel1 <- glm(stroke ~ age + hypertension + avg_glucose_level , data = trainingset, family=binomial(link="logit"))
+summary(LogisticModel1)
+```
+
+```{r}
+LogisticModel2 <- glm(stroke ~ age + avg_glucose_level , data = trainingset, family=binomial(link="logit"))
+summary(LogisticModel2)
+```
+
+```{r}
+LogisticModel3 <- glm(stroke ~ age + hypertension  , data = trainingset, family=binomial(link="logit"))
+summary(LogisticModel3)
+```
+
+```{r}
+LogisticModel4 <- glm(stroke ~ hypertension + avg_glucose_level , data = trainingset, family=binomial(link="logit"))
+summary(LogisticModel4)
+```
+
+__Explanation__
+```
+Based on the results, the second model is the best of the four models we created; Although not the smallest, but this model get the second smallest position with a difference of only 1.8 to the first one and have a very tiny p value.So we are gonna use the second model, LogisticModel2 (AIC : 1300.8, attribute : age and avg_glucose_level)
+```
+
+## 1d. Asses Model
+
+```{r}
+#Making predictions using testing data
+predictionLogistic <- predict(LogisticModel2, newdata = subset(validationset, select= c(1,2,3,4,5,6,7,8,9,10)), type= "response")
+```
+```{r}
+#Evaluation
+evaluation <- prediction(predictionLogistic, validationset$stroke)
+prf <- performance(evaluation, measure="tpr", x.measure ="fpr" )
+plot(prf, main="Accuracy for Validationset")
+```
+
+```{r}
+auc <- performance(evaluation, measure="auc")
+auc <- auc@y.values[[1]]
+auc
+```
+__Explanation__
+```
+Our validationset's auc value is 0.8571429, which is a positive thing since the closer the auc value to 1, the better model will be. So, using the second model in the validation set, the prediction accuracy is around 85,7%.
+```
+
+```{r}
+predictionLogistic2 <- predict(LogisticModel2, newdata = subset(trainingset, select= c(1,2,3,4,5,6,7,8,9,10)), type= "response")
+evaluation2 <- prediction(predictionLogistic2, trainingset$stroke)
+prf2 <- performance(evaluation2, measure="tpr", x.measure ="fpr" )
+plot(prf2, main="Accuracy for Trainingset")
+```
+
+
+```{r}
+auc2 <- performance(evaluation2, measure="auc")
+auc2 <- auc2@y.values[[1]]
+auc2
+```
+__Explanation__
+```
+We receive an auc value of 83.71 when we use our training data set, which is pretty good because the difference with the validation set is quite small.
+```
+#### Accuracy
+```{r}
+result <- ifelse(predictionLogistic > 0.5, 1, 0)
+missclassificationError <- mean(result != validationset$stroke)
+print(paste("Accuracy Validationset : ", 1-missclassificationError))
+```
+
+```{r}
+result2 <- ifelse(predictionLogistic2 > 0.5, 1, 0)
+missclassificationError2 <- mean(result2 != trainingset$stroke)
+print(paste("Accuracy Trainingset : ", 1-missclassificationError2))
+```
+__Explanation__
+```
+The accuracy between the validation set and the training set is only 0.001 different which is a very good thing, we don't experience "overfitting" events where accuracy is only good at validation set or the training set. Therefore I can conclude that the model we created is deployable. The equation is:
+
+chance of stroke = 0.070137  age + 0.004552 avg_glucose_levels - 7.491973
+
+From the above equation it can be interpreted that for every 1% increase in age, there is a 0.070137 increase in the chance of having a stroke. And for every And for every 1% increase in glucose level, there will be a 0.004552 increase in the chance of having a stroke. So chance of having a stroke tend to be small if they meet this criteria: young age and have normal/low glucose levels.
+```
+## Decision Tree
+#### Making the decision tree model
+```{r}
+modelDT <- rpart(stroke~., data= trainingset, cp= 0.001, method= "class")
+```
+```{r}
+modelDT
+```
+
+```{r}
+rpart.plot(modelDT)
+```
+__Explanation__
+```
+The factors considered in the tree are those that contribute to determining whether or not someone experiences a stroke. We have age, average glucose level, heart disease, BMI, work type, gender, and smoking status. The way to read it is the same as reading a binary tree, we match our current condition with the node/arrow listed.
+```
+
+```{r}
+predictionDT <- predict(modelDT, validationset, type="class")
+
+confusion_matrix <- table(predictionDT, validationset$stroke)
+confusion_matrix
+```
+___Explanation___
+```
+The horizontal represents actual situation while the vertical represents pedicted result.
+
+1. True negative coordinates (0,0) are those where we correctly predicted the stroke value to be 0. Our decision tree model successfully predict 959 negative result.
+2. False negative coordinates (1,0) are those where we fail to predict. When the siuation is positive we predict it as negative.Our decision tree model failed to predict 48 postive result.
+3. False positive coordinates(0,1) are those where we fail to predict. When the situation is negative we predict it as positive. Our decision tree model failed to predict 13 negative result.
+4. True positive coordinates (1,1) are those where we correctly predicted the stroke value to be 1. Our decision tree model successfully predict 1 positive result.
+```
+
+#### Check Accuracy
+##### Accuracy per label
+```{r}
+acc <- diag(confusion_matrix)/rowSums(confusion_matrix) * 100
+acc
+```
+__Explanation__
+```
+1. Class 0 can be predicted with 95.23% accuracy
+2. Class 1 can be predicted with 7.14% accuracy
+```
+##### Overall Accuracy
+```{r}
+accuracy <- sum(diag(confusion_matrix))/ sum(confusion_matrix)
+print(paste("Overall Accuracy DTM:", accuracy))
+
+```
+__Explanation__
+```
+From the output above, it can be seen that our decision tree model has an overall accuracy of 94%, a fairly high number. When compared to our logistic model, the accuracy difference is only 0.01. Both method have such high accuracy,so we can conclude that they are both deployable.
+```
+```{r}
+importance <- modelDT$variable.importance
+barplot(importance, ylim = c(0,50), col = c("#F7FCFD","#E0ECF4","#BFD3E6","#9EBCDA", "#8C96C6", "#8C6BB1", "#88419D","#810F7C","#4D004B", "#084594"),
+        main="Importance Attributes to Chance of Stroke")
+#brewer.pal(9, "BuPu")
+```
+__Explanation__
+```
+The barplot above shows several variables that are important in decision making. Age, BMI, and Average Glucose Level are the top three most important variables.
+```
+
+Thankyou!
+
+
