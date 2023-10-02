@@ -1,0 +1,524 @@
+---
+title: "Case_2"
+author: "Belinda Mutiara"
+date: "8/15/2023"
+output: html_document
+---
+
+About a company
+Bellabeat, a high-tech manufacturer of health-focused products for women. Bellabeat is a successful small company, but they have the potential to become a larger player in the global smart device market. Urška Sršen, cofounder and Chief Creative Officer of Bellabeat, believes that analyzing smart device fitness data could help unlock new growth opportunities for the company
+
+Questions for the analysis
+What are some trends in smart device usage?
+How could these trends apply to Bellabeat customers?
+How could these trends help influence Bellabeat marketing strategy
+Business task
+Identify potential opportunities for growth and recommendations for the Bellabeat marketing strategy improvement based on trends in smart device usage.
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+## Step 1: Ask
+
+
+1.1 The Business Task¶
+As a data analyst working on the marketing analyst team, I will analyze smart device data to gain insight into how consumers are using their smart devices, and focus on one of Bellabeat's products. By outlining the process of the analysis and the key findings, high-level recommendations for marketing strategies will be presented to the key stakeholders. In this case study, I will focus on Bellabeat App for recommendations.
+
+1.2 Key Stakeholders
+Urška Sršen: cofounder and Chief Creative Officer.
+
+Sando Mur: cofounder and a key member of the Bellabeat executive team.
+
+Bellabeat marketing analytics team.
+
+
+## Step 2: Prepare
+18 CSV files are available from FitBit Fitness Tracker Data (CC0: Public Domain, dataset made available through Mobius). This Kaggle data set contains personal fitness tracker from thirty Fitbit users consented to the submission of personal tracker data.
+
+We will use R as the tool because we can explore, process and visualize datasets in one platform, RStudio Cloud. SQL queries can also be used on data frames by running sqldf(). The files are uploaded into the RStudio Cloud work directory /cloud/project/BellaBeat/Fitabase.
+
+2.1 Loading packages
+Here are the packages used in this case study:
+
+```{r}
+install.packages("sqldf")
+```
+```{r}
+install.packages("ggpubr")
+```
+
+```{r}
+install.packages("waffle")
+```
+
+
+```{r}
+library(tidyverse) #a must-have in R 
+library(janitor) #for examining and cleaning dirty data
+library(lubridate) #for date & time formats
+library(sqldf) #for running SQL in R
+library(ggpubr) #for creating and customizing ggplot2
+library(waffle) #for the waffle charts
+library(scales) #scaling used by ggplots
+library(RColorBrewer) #for beautiful color palettes
+```
+They all contain Id as the primary keys, and each file include multiple variables, such as ActivityDate, Time, Distance, Steps,Intensities, Calories, Weight, etc. As this case study aims to find trends, we will focus on data with dates and hours; minutes data will be secondary.
+
+We also observe some data limitations:
+
+It is a small sample size (33 distinctive users based on data). After slicing and grouping, the size becomes even smaller and may not properly lead to meaningful results.
+
+Demographic information, such as gender, age and health condition, is unavailable. As women is the target audience for Bellabeat, data specifically focused on women will be most ideal.
+
+The data is dated in 2016. Due to major world event, such as the pandemic, lifestyle has changed significantly over the past years, therefore the trends observed here may not reflect users scenario nowadays. To gain more consumer insights, it will be the best to collect more up-to-date data.
+
+2.2 Assigning names and import files
+Since the datasets scope is defined, we will assign names and import them to data frames.
+
+```{r}
+activity <- read_csv(file= "Input Case 2/dailyActivity_merged.csv") 
+calories <- read_csv(file= "Input Case 2/dailyCalories_merged.csv") 
+intensities <- read.csv(file= "Input Case 2/dailyIntensities_merged.csv")
+step <- read.csv(file= "Input Case 2/dailySteps_merged.csv")
+h_step <- read.csv(file= "Input Case 2/hourlySteps_merged.csv")
+sleep <- read.csv(file= "Input Case 2/sleepDay_merged.csv")
+weight <- read.csv(file= "Input Case 2/weightLogInfo_merged.csv")
+```
+
+2.3 Verifying data
+Baed on observation, data sets dailyCalories, dailyIntensities, and dailySteps could be subsets of dailyActivities. We will verify this with SQL queries by running sqldf():
+
+```{r}
+sqldf("SELECT COUNT()
+      FROM activity 
+      LEFT JOIN calories ON 
+      activity.Id = calories.Id AND 
+      activity.ActivityDate = calories.ActivityDay AND 
+      activity.Calories = calories.Calories")
+```
+
+```{r}
+sqldf("SELECT COUNT()
+      FROM activity 
+      LEFT JOIN step  ON 
+      activity.Id = step.Id AND 
+      activity.ActivityDate = step.ActivityDay AND 
+      activity.Totalsteps = step.StepTotal")
+```
+
+```{r}
+sqldf("SELECT COUNT()
+      FROM activity 
+      LEFT JOIN intensities  ON 
+      activity.Id = intensities.Id AND 
+      activity.ActivityDate = intensities.ActivityDay AND 
+      activity.SedentaryMinutes = intensities.SedentaryMinutes AND
+      activity.LightlyActiveMinutes = intensities.LightlyActiveMinutes AND
+      activity.FairlyActiveMinutes = intensities.FairlyActiveMinutes AND
+      activity.VeryActiveMinutes = intensities.VeryActiveMinutes AND
+      activity.SedentaryActiveDistance = intensities.SedentaryActiveDistance AND
+      activity.LightActiveDistance = intensities.LightActiveDistance AND
+      activity.ModeratelyActiveDistance = intensities.ModeratelyActiveDistance AND
+      activity.VeryActiveDistance = intensities.VeryActiveDistance")
+```
+As all 3 queries return 940, we verify that dailyActivity contains dailyCalories, dailyIntensities and dailySteps, we will remove them and use dailyActivities as one dataframe.
+
+```{r}
+rm(calories,intensities,step)
+
+```
+```{r}
+n_distinct(activity$Id) 
+n_distinct(h_step$Id) 
+n_distinct(sleep$Id) 
+n_distinct(weight$Id)
+```
+Due to the small sample size of weight data, it will be excluded from this study. Sample size of sleep data is rather small too, but we will keep it for reference.
+After reviewing the sample size, let's check and clean duplicates:
+
+```{r}
+sum(duplicated(activity))
+sum(duplicated(h_step))
+sum(duplicated(sleep))
+```
+ll files has 0 duplicate, except for sleep, where there are 3 duplicates.
+
+```{r}
+sleep <- unique(sleep)
+sum(duplicated(sleep))
+```
+
+Now the duplicates in sleep are removed.
+
+## Step 3: Process
+
+First step in this phase is data cleaning. We notice the columns are in CamelCase naming convention. As R is case sensitive, we will first change all columns to lower case to make merging files easiers.
+
+3.1 Changing column names
+
+```{r}
+activity <- rename_with(activity, tolower)
+sleep <- rename_with(sleep, tolower)
+h_step <- rename_with(h_step, tolower)
+```
+
+```{r}
+head(activity)
+head(sleep)
+head(h_step)
+```
+
+3.2 Converting date and time format
+Here we will convert character format to date format. First, we make consistent date format in activity and sleep, as sleep will be merged into activity.
+
+```{r}
+activity <- activity %>% 
+  rename(date= activitydate) %>%
+  mutate(date= as_date(date, format= "%m/%d/%Y"))
+sleep <- sleep %>%
+  rename(date= sleepday) %>%
+  mutate(date= as_date(date, format= "%m/%d/%Y  %I:%M:%S %p", tz= Sys.timezone()))
+head(activity)
+head(sleep)
+```
+Second, convert $activityhour column in h_step data to date-time format.
+
+```{r}
+h_step <- h_step %>% 
+  rename(date_time= activityhour) %>% 
+  mutate(date_time= as.POSIXct(date_time, format="%m/%d/%Y %I:%M:%S %p", tz= Sys.timezone()))
+```
+
+```{r}
+head(h_step)
+```
+3.3 Merging dataframes
+Merge daily dataframes into activity_sleep. As sleep has fewer observations, add all.x =TRUE in the script to keep unmatched cases in activity.
+
+```{r}
+activity_sleep <- merge(activity, sleep, by= c("id","date"), all.x = TRUE) 
+head(activity_sleep)
+```
+
+## Step 4: Analyize & Share
+4.1 Daily data summary
+First, let's take a look at a summary for daily data:
+
+```{r}
+activity_sleep %>% 
+  select(totalsteps, calories,
+         veryactiveminutes, fairlyactiveminutes, lightlyactiveminutes, sedentaryminutes,
+         totalsleeprecords, totalminutesasleep, totaltimeinbed)%>%
+  drop_na()%>%
+  summary()
+```
+Key findings:
+
+* On average, each users takes 7,638 steps per day. This is lower than the daily 10,000 steps recommended by CDC.
+* On average, each users spends 16.5 hours per day being seated or inactive. That's almost 70% of the day!
+* The Mean is way higher than the median in very active minutes and fairly active minutes, indicating a non-normal distribution. This indicates there may be only a few users with much longer active minutes, while most users are with short active minutes.
+* On average, each users sleeps 6.98 hours per day.
+
+4.2 Correlations
+We want to find out if there are correlations between these variables:
+
+Daily Steps vs Calories
+Daily Steps vs.Daily Sleep
+Let's make a plot for steps vs. calories:
+
+```{r}
+#steps vs. calories  
+ggplot(activity_sleep,aes(totalsteps,calories))+geom_jitter(alpha=.5)+
+    geom_rug(position="jitter", size=.08)+
+    geom_smooth(size =.6)+
+    stat_cor(method = "pearson", label.x = 20000, label.y = 2300)+
+    labs(title= "Daily steps vs. calories", x= "daily steps", y="calories")+
+    theme_minimal()
+```
+
+As one might expect, there's a correlation between daily steps and calories. The more steps taken, the more calories one may burn. Here I used stat_cor() with Pearson method to run a quick correlation coefficient test, R= 0.59, indicating the two variables are somewhat correlated.
+
+```{r}
+#steps vs. sleep  
+ggplot(data= subset(activity_sleep,!is.na(totalminutesasleep)),aes(totalsteps,totalminutesasleep))+
+    geom_rug(position= "jitter", size=.08)+
+    geom_jitter(alpha= 0.5)+
+    geom_smooth(color= "blue", size=.6)+
+    stat_cor(method = "pearson", label.x = 15000, label.y = 650)+
+    labs(title= "Daily steps vs. sleep", x= "daily steps", y= "minutes asleep")+
+    theme_minimal()
+```
+R= 0.19, indicating little to no correlation between steps and amount of minutes users sleep per day.
+
+4.3 Activity level during the days of the week
+We want to find out when users are the most active. First, separate date and time in h_step dataframe:
+
+```{r}
+h_step <- h_step %>% 
+  separate(date_time, into= c("date", "time"), sep = " ") %>% 
+  mutate(date= ymd (date))
+
+head(h_step)
+```
+Add $weekday as a new column:
+
+```{r}
+h_step_weekday <- (h_step)%>%
+  mutate(weekday= weekdays(date))%>%
+  group_by (weekday,time) %>% 
+  summarize(average_steps= mean(steptotal), .groups = 'drop')
+
+h_step_weekday$weekday <- ordered(h_step_weekday$weekday, 
+                                 levels=c("Monday", "Tuesday", "Wednesday","Thursday","Friday", "Saturday", "Sunday"))
+                                 
+head(h_step_weekday)
+```
+A heat map will show users' activity level at one glance.
+
+
+```{r}
+ggplot(h_step_weekday, aes(x= time, y= weekday, 
+                           fill= average_steps)) +
+  theme(axis.text.x= element_text(angle = 90))+
+  labs(title= "Active Time During the Week", 
+       x=" ", y=" ",fill = "average\nsteps",
+       caption= 'Data Source: Fitabase Data 4.12.16-5.12.16')+
+  scale_fill_gradient(low= "white", high="red2")+
+  geom_tile(color= "white",lwd =.6,linetype =1)+
+  coord_fixed()+
+  theme(plot.title= element_text(hjust= 0.5,vjust= 0.8, size=16),
+        panel.background= element_blank())
+
+```
+Observation: Users start their day later on weekends, and are most active during 11am-1pm on Saturday, and 5-6pm on Wednesday.
+
+4.4 Grouping users into four types
+Based on daily activity level, we further group users into 4 types: Sedentary, Lightly Active, Fairly Active, and Very Active. 
+The categorization is based on this article: [https://www.10000steps.org.au/articles/healthy-lifestyles/counting-steps/
+
+4.4.1 The distribution
+
+```{r}
+daily_average <- activity_sleep %>% 
+  group_by (id) %>% 
+  summarise(avg_daily_steps= mean(totalsteps), 
+            avg_daily_cal= mean(calories), 
+            avg_daily_sleep= mean(totalminutesasleep, 
+                                   na.rm = TRUE)) %>% 
+  mutate(user_type= case_when(
+    avg_daily_steps < 5000 ~ "sedentary",
+    avg_daily_steps >= 5000 & avg_daily_steps <7499 ~"lightly active",
+    avg_daily_steps >= 7499 & avg_daily_steps <9999 ~"fairly active",
+    avg_daily_steps >= 10000 ~"very active"
+  ))
+
+head(daily_average)
+```
+
+```{r}
+user_type_sum <- daily_average %>%
+  group_by(user_type) %>%
+  summarise(total= n()) %>%
+  mutate(total_percent= scales::percent (total/sum(total)))
+
+user_type_sum
+```
+As users are fairly distributed among 4 types, despite the sample size is small, this dataset is somewhat unbiased in terms of activity level.
+
+4.4.2 Activities of each type: steps, calories, distance & sleep
+We want to looking to different variables vs each type:
+
+* Types vs. Steps
+* Types vs. Calories
+* Types vs. Distance
+* Types vs. Sleep
+* To visualize data, we will need to add and reorder $user_type into the activity_sleep_final dataframe:
+
+```{r}
+activity_sleep_final <- merge(activity_sleep, daily_average[c("id","user_type")], by="id") 
+
+activity_sleep_final$user_type <-ordered(activity_sleep_final$user_type, levels= c("sedentary","lightly active","fairly active","very active")) 
+
+head(activity_sleep_final)
+
+```
+
+** Steps vs Types **
+
+```{r}
+ggplot(activity_sleep_final[which(activity_sleep_final$totalsteps>0),], 
+       aes(user_type,totalsteps, fill=user_type))+
+  geom_boxplot()+
+  stat_summary(fun="mean", geom="point", 
+               shape=23,size=2, fill="white")+
+  labs(title= "Daily Steps by User Type", 
+       x= " ", y="total steps",
+       caption= 'Data Source: Fitabase Data 4.12.16-5.12.16')+
+  scale_fill_brewer(palette="BuPu")+
+  theme(plot.title= element_text(hjust= 0.5,vjust= 0.8, size=16),
+        legend.position= "none")
+
+```
+As shown in the box plot above, very active users take more than 10,000 steps per day, with outliers widely up to 30,000, meaning the daily activity level of this type vary significantly.
+
+** Calories vs Types **
+```{r}
+ggplot(activity_sleep_final[which(activity_sleep_final$calories>0),], aes(user_type,calories, fill=user_type))+
+  geom_boxplot()+
+  stat_summary(fun= "mean", geom= "point", 
+               shape= 23,size= 2, fill= "white")+
+  labs(title= "Daily Calories Burnt by User Type", 
+       x= " ", y="calories burnt",
+       caption= 'Data Source: Fitabase Data 4.12.16-5.12.16')+
+  scale_fill_brewer(palette="BuPu")+
+  theme(plot.title= element_text(hjust= 0.5,vjust= 0.8, size=16),
+        legend.position= "none")
+```
+* Average calories burnt by types are in line with their daily activity level.
+* Lightly active has only one outlier, and a mean very close to median, indicating during the time frame, they have the most consistent calories burnt trend.
+
+** Distance vs. Types **
+```{r}
+ggplot(activity_sleep_final[which(activity_sleep_final$totaldistance>0),], 
+       aes(user_type,totaldistance, fill= user_type))+
+  geom_boxplot()+
+  stat_summary(fun= "mean", geom= "point", 
+               shape= 23,size= 2, fill= "white")+
+  labs(title= "Daily Distance by User Type", 
+       x= " ", y = "total distance (miles)",
+       caption= 'Data Source: Fitabase Data 4.12.16-5.12.16')+
+  scale_fill_brewer(palette= "BuPu")+
+  theme(plot.title= element_text(hjust= 0.5,vjust= 0.8, size=16),
+        legend.position = "none")
+```
+* The average distance is in line with each type's daily steps, the more step one takes, the longer distance one walks.
+* The very active type has the most outliers, meaning their activity pattern is inconsistent.
+
+** Sleep vs Types **
+```{r}
+ggplot(subset(activity_sleep_final,!is.na(totalminutesasleep)),
+       aes(user_type,totalminutesasleep, fill=user_type))+
+  geom_boxplot()+
+  stat_summary(fun="mean", geom="point", 
+               shape=23,size=2, fill="white")+
+  labs(title= "Sleep by User Type", 
+       x= " ", y=" minutes asleep", 
+       caption= 'Data Source: Fitabase Data 4.12.16-5.12.16')+
+  scale_fill_brewer(palette="BuPu")+
+  theme(plot.title= element_text(hjust= 0.5,vjust= 0.8, size=16),
+        legend.position= "none")
+```
+
+* There are a lot of outliers in the data, meaning the amount of sleep for each type varies significantly.
+* The lightly active type has the longest sleep, while the very active type has the least amount of sleep.
+
+4.5 Usage of the tracker
+We want to know how user wear the tracker. First, we can look into the number of days they wore the tracker, and group them into 3 categories: low, mid and high.
+
+```{r}
+days_usage <- activity_sleep_final %>%
+  group_by(id) %>%
+  summarize(record_days=sum(n())) %>%
+  mutate(usage= case_when(
+    record_days >= 1 & record_days <= 10 ~ "low",
+    record_days >= 11 & record_days <=20 ~ "mid",
+    record_days >= 21 & record_days <= 31 ~ "high", 
+  ))
+
+head(days_usage)
+```
+
+Then we calculate the percentage of each category:
+
+```{r}
+days_usage_percent <- days_usage %>%
+  group_by(usage) %>%
+  summarise(user_count= n()) %>%
+  mutate(total_percent= scales::percent(user_count/sum(user_count)))
+
+days_usage_percent
+```
+A waffle chart to show usage group distribution at one glance:
+
+```{r}
+days_usage_waffle=c("high: used 21~30 days" =29,"mid: used 11~20 days"= 3, "low: used 1~10 days"=1)
+
+waffle(days_usage_waffle, row=3, size=1, legend_pos='right')+
+  labs(title= "Usage Distribution")+
+  scale_fill_manual(values=c("#9EBCDA","#BFD3E6","#E0ECF4"))+
+  theme(panel.background= element_blank(),
+        plot.title= element_text(hjust= 0.5,vjust= 1, size=16))
+
+```
+Scale for 'fill' is already present. Adding another scale for 'fill', which
+will replace the existing scale.
+
+Most of users wear the tracker more than 21 days during the period of a month. As we have observed, not all users wear it 24 hours every day. Let's see if there is some trend in this time frame.
+
+Group hourly step by date:
+```{r}
+h_step_trend<-(h_step) %>%
+  group_by(date) %>%
+  summarise(average_hr= n()/33)
+
+head(h_step_trend) #This is the average hours users keep the tracker on.
+```
+
+A line chart shows how users wear the tracker over time:
+
+```{r}
+ggplot(h_step_trend, aes(x=date,y=average_hr))+
+  scale_x_date(breaks= date_breaks("1 day"), 
+               labels= date_format("%b-%d"), 
+               limits=(c(min(h_step_trend$date),
+                max(h_step_trend$date))),
+               expand=c(.02,.02))+
+  scale_y_continuous(limits=c(0,25),
+                     breaks= seq(0,max(h_step_trend$average_hr),by= 4), 
+                     expand= c(0,.7))+
+  labs(title="Daily Usage in a Month", 
+       x=" ", y="worn hours per day",
+       caption= 'Data Source: Fitabase Data 4.12.16-5.12.16')+
+  scale_fill_brewer(palette="BuPu")+ 
+  annotate("rect", xmin= as.Date("2016-04-28"), 
+           xmax= as.Date("2016-05-11"),
+           ymin= -Inf, ymax = Inf, 
+           fill= "#E0ECF4", alpha=.6)+ 
+theme(axis.text.x= element_text(angle = 90), 
+        plot.title= element_text(size=16),
+        panel.grid.major.x=element_line(colour="grey60",
+                                        linetype="solid",size=0.1),
+        panel.background= element_blank())+geom_line()
+```
+
+This descending line indicates that users wear the tracker full day at first, maintained a average wearing time of 23 hours a day, and then gradually decrease after 2 weeks (April 28th).
+
+## Step 4: Act
+
+Let’s review the key findings first:
+
+* Users take 7,638 steps per day on average, lower than the daily 10,000 steps recommended by CDC. Users spend 70% of the time being seated or inactive per day.
+
+* A correlation can be identified between daily steps and calories, while there is no correlation between steps taken and amount of time users sleep per day.
+
+* The lightly active type has the longest sleep, while the very active type has the least amount of sleep.
+
+* Users are most active during 11am-1pm on Saturday, and 5-6pm on Wednesday.
+
+* The average time that users keep the tracker on gradually decreases after 2 weeks (April 28th).
+
+Based on the findings, Recommendations are as below:
+
+* The App could recommend daily steps targets based on the user’s profile, lifestyle, and personal goals, and send reminders when the user is behind the targets. Features such as mini games, or wellness trivia, may help creating a sense of reward and thus increase retention rate. The App could send alerts to encourage activity if user remain seated or inactive longer than a certain period of time. This could be useful for users who work from home.
+
+* Studies has shown that social support interventions increase physical activity among adults. The App could enhance social networking features such as in-app chats, or team goal setting among users to promote exercise habits.
+
+* For users who specifically seek sleep improvement, The App could recommend light activities and alert the users if activity level has gone too intense based on their profile. Features to assist meditation may be useful to such users.
+
+* It is worth further looking into why wear time decreases over a period of time. For Bellabeat devices,features such as water-proof, minimalist design, long battery life, or comfort for long wear could help encourage users keep it on all day.
+
